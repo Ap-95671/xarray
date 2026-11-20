@@ -6462,6 +6462,18 @@ class TestDataset:
         expected = DataArray(np.zeros((0, 10)), dims=["nCells", "nVertLevels"])
         assert_identical(expected, actual)
 
+    def test_where_drop_outer_dataset_condition(self) -> None:
+        ds = Dataset(
+            {"a": ("x", [0, 1, 0, 0, 0]), "b": ("x", [0, 0, 0, 2, 0])},
+            coords={"x": [10, 20, 30, 40, 50]},
+        )
+        expected = Dataset(
+            {"a": ("x", [1.0, np.nan, np.nan]), "b": ("x", [np.nan, np.nan, 2.0])},
+            coords={"x": [20, 30, 40]},
+        )
+
+        assert_identical(ds.where(ds > 0, drop="outer"), expected)
+
     def test_where_drop_no_indexes(self) -> None:
         ds = Dataset({"foo": ("x", [0.0, 1.0])})
         expected = Dataset({"foo": ("x", [1.0])})

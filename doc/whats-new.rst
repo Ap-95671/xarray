@@ -13,6 +13,9 @@ v2026.09.1 (unreleased)
 
 New Features
 ~~~~~~~~~~~~
+- :py:meth:`DataArray.where` and :py:meth:`Dataset.where` support
+  ``drop="outer"`` to trim fully masked edges while preserving interior
+  coordinates (:issue:`11883`).
 - :py:func:`apply_ufunc` accepts dimension names for ``vectorize``, e.g.
   ``vectorize=["time"]``, to only loop over these broadcast dimensions and pass
   all other broadcast dimensions to ``func`` in bulk. This is much faster than

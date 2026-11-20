@@ -11,6 +11,7 @@ from typing import (
     Any,
     Concatenate,
     Generic,
+    Literal,
     Union,
     overload,
     override,
@@ -1106,7 +1107,9 @@ class DataWithCoords(AttrAccessMixin):
             restore_coord_dims=restore_coord_dims,
         )
 
-    def where(self, cond: Any, other: Any = dtypes.NA, drop: bool = False) -> Self:
+    def where(
+        self, cond: Any, other: Any = dtypes.NA, drop: bool | Literal["outer"] = False
+    ) -> Self:
         """Filter elements from this object according to a condition.
 
         Returns elements from 'DataArray', where 'cond' is True,
@@ -1125,9 +1128,13 @@ class DataWithCoords(AttrAccessMixin):
             Value to use for locations in this object where ``cond`` is False.
             By default, these locations are filled with NA. If a callable, it must
             expect this object as its only parameter.
-        drop : bool, default: False
+        drop : bool or {"outer"}, default: False
             If True, coordinate labels that only correspond to False values of
             the condition are dropped from the result.
+            If "outer", keep the contiguous slice from the first to the last
+            label that corresponds to a True value along each dimension. The
+            slice is empty if no labels match. For chunked arrays, the reduced
+            condition along each dimension is computed to determine the bounds.
 
         Returns
         -------
@@ -1177,6 +1184,13 @@ class DataWithCoords(AttrAccessMixin):
                [15., nan, nan, nan]])
         Dimensions without coordinates: x, y
 
+        >>> a.where((a == 6) | (a == 18), drop="outer")
+        <xarray.DataArray (x: 3, y: 3)> Size: 72B
+        array([[ 6., nan, nan],
+               [nan, nan, nan],
+               [nan, nan, 18.]])
+        Dimensions without coordinates: x, y
+
         >>> a.where(lambda x: x.x + x.y < 4, lambda x: -x)
         <xarray.DataArray (x: 5, y: 5)> Size: 200B
         array([[  0,   1,   2,   3,  -4],
@@ -1217,12 +1231,22 @@ class DataWithCoords(AttrAccessMixin):
                 _dataarray_indexer if isinstance(cond, DataArray) else _dataset_indexer
             )
 
-            indexers = {}
-            for dim in cond.sizes.keys():
-                indexers[dim] = _get_indexer(dim)
+            indexers: dict[Hashable, DataArray | slice] = {}
+            for dim in cond.sizes:
+                keep = _get_indexer(dim)
+                if drop == "outer":
+                    values = keep.to_numpy()
+                    if values.any():
+                        start = values.argmax()
+                        stop = values.size - values[::-1].argmax()
+                        indexers[dim] = slice(start, stop)
+                    else:
+                        indexers[dim] = slice(0, 0)
+                else:
+                    indexers[dim] = keep
 
-            self = self.isel(**indexers)
-            cond = cond.isel(**indexers)
+            self = self.isel(indexers)
+            cond = cond.isel(indexers)
 
         from xarray.computation import ops
 

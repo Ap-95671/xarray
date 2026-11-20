@@ -3167,6 +3167,31 @@ class TestDataArray:
         actual = arr.where(lambda x: x.y < 2, drop=True)
         assert_identical(actual, expected)
 
+    def test_where_drop_outer(self, use_dask: bool) -> None:
+        array = DataArray(
+            np.arange(30).reshape(5, 6),
+            dims=("x", "y"),
+            coords={"x": [40, 30, 20, 10, 0], "y": list("abcdef")},
+        )
+        if use_dask:
+            array = array.chunk({"x": 2, "y": 2})
+
+        actual = array.where(lambda a: (a == 7) | (a == 22), -1, drop="outer")
+        expected = DataArray(
+            [[7, -1, -1, -1], [-1, -1, -1, -1], [-1, -1, -1, 22]],
+            dims=("x", "y"),
+            coords={"x": [30, 20, 10], "y": list("bcde")},
+        )
+        if use_dask:
+            assert actual.chunks is not None
+        assert_identical(actual, expected)
+
+    @pytest.mark.parametrize("size", [0, 3])
+    def test_where_drop_outer_no_match(self, size: int) -> None:
+        array = DataArray(np.zeros(size), dims="x")
+        actual = array.where(array > 0, drop="outer")
+        assert_identical(actual, array.isel(x=slice(0, 0)))
+
     def test_where_other_lambda(self) -> None:
         arr = DataArray(np.arange(4), dims="y")
         expected = xr.concat(
